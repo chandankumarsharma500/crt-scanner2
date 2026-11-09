@@ -4,17 +4,83 @@ import streamlit as st
 from scanner import scan_symbol
 from universe import load_nse_symbols, download_histories
 
+
 st.set_page_config(page_title="CRT Scanner 2 · NSE", page_icon="📈", layout="wide")
-st.title("📈 CRT Scanner 2 — NSE Equities")
+
+# Modern dark dashboard styling (keeps the existing scanner logic unchanged)
+st.markdown("""
+<style>
+:root { color-scheme: dark; }
+.stApp {
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(0,118,255,.20), transparent 38%),
+    radial-gradient(ellipse at 90% 15%, rgba(0,220,150,.10), transparent 32%),
+    linear-gradient(145deg, #050d1d 0%, #07172e 55%, #061225 100%);
+  color: #edf5ff;
+}
+.block-container { max-width: 1500px; padding-top: 2rem; padding-bottom: 3rem; }
+[data-testid="stHeader"] { background: rgba(4,12,27,.72); }
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #0b1c36 0%, #071326 100%);
+  border-right: 1px solid rgba(65,160,255,.28);
+}
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 { color: #eaf4ff; }
+h1, h2, h3 { color: #f4f8ff !important; letter-spacing: -.03em; }
+p, label, .stMarkdown { color: #c7d7ee; }
+.crt-hero {
+  padding: 25px 30px; margin: 0 0 22px 0; border-radius: 22px;
+  background: linear-gradient(110deg, rgba(12,42,82,.96), rgba(5,25,48,.94) 58%, rgba(0,92,83,.72));
+  border: 1px solid rgba(43,180,255,.42);
+  box-shadow: 0 16px 45px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.crt-kicker { color:#51f0bd; font-size: .78rem; font-weight:800; letter-spacing:.18em; text-transform:uppercase; }
+.crt-title { font-size: clamp(2rem,4vw,3.2rem); font-weight:900; color:#fff; line-height:1.05; margin:8px 0; }
+.crt-title span { color:#50edaa; }
+.crt-sub { color:#c4dcf5; font-size:1rem; margin-top:8px; }
+div[data-testid="stMetric"] {
+  background: linear-gradient(145deg, rgba(14,43,78,.96), rgba(7,25,47,.96));
+  border: 1px solid rgba(62,151,230,.30); border-radius:16px;
+  padding:16px 18px; box-shadow:0 10px 28px rgba(0,0,0,.18);
+}
+div[data-testid="stMetricLabel"] { color:#a9c7e8 !important; }
+div[data-testid="stMetricValue"] { color:#54efb0 !important; font-weight:850; }
+.stButton > button, .stDownloadButton > button {
+  border-radius: 12px; border: 1px solid rgba(74,222,170,.55);
+  background: linear-gradient(100deg,#087fcb,#08b981); color:#041629;
+  font-weight:800; min-height: 2.8rem; transition: all .18s ease;
+}
+.stButton > button:hover, .stDownloadButton > button:hover {
+  border-color:#8affd2; color:#001b24; box-shadow:0 0 22px rgba(20,220,160,.24);
+}
+div[data-testid="stDataFrame"], div[data-testid="stTable"] {
+  border:1px solid rgba(67,151,226,.32); border-radius:14px; overflow:hidden;
+}
+div[data-testid="stAlert"] { border-radius:14px; }
+div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
+  background:#0b1d35; border-color:#24496f; border-radius:10px;
+}
+hr { border-color:rgba(74,145,210,.25); }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div class="crt-hero">
+  <div class="crt-kicker">NSE EQUITY MARKET SCANNER</div>
+  <div class="crt-title">🛡️ CRT <span>SCANNER</span></div>
+  <div class="crt-sub">Scan · Detect · Verify &nbsp; | &nbsp; M1 CRT → M2 Sweep → M3 Entry</div>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("### Your market workspace")
 st.caption("Daily timeframe · M1 CRT + M2 Sweep → M3 Entry · Based on your Pine Script rules")
 
 with st.sidebar:
-    st.header("Scanner settings")
+    st.markdown("## ⚙️ Scanner settings")\n    st.caption("Tune your scan")
     period = st.selectbox("Historical data", ["3y", "5y", "2y"], index=0)
     batch_size = st.selectbox("Symbols per run", ["All NSE stocks", 500, 1000, 2000], index=0)
     workers = st.slider("Parallel downloads", 2, 12, 8)
     st.divider()
-    st.subheader("CRT strategy")
+    st.markdown("### 🎯 CRT strategy")
     atr_len = st.number_input("ATR Length", 1, 100, 14)
     disp = st.number_input("Displacement × ATR", 0.1, 10.0, 1.2, 0.1)
     piv_l = st.number_input("Pivot Left", 1, 20, 3)
