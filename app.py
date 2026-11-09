@@ -11,7 +11,7 @@ st.caption("Daily timeframe · M1 CRT + M2 Sweep → M3 Entry · Based on your P
 with st.sidebar:
     st.header("Scanner settings")
     period = st.selectbox("Historical data", ["3y", "5y", "2y"], index=0)
-    batch_size = st.select_slider("Symbols per run", options=[100, 250, 500, 1000, 2000], value=500)
+    batch_size = st.selectbox("Symbols per run", ["All NSE stocks", 500, 1000, 2000], index=0)
     workers = st.slider("Parallel downloads", 2, 12, 8)
     st.divider()
     st.subheader("CRT strategy")
@@ -43,10 +43,10 @@ left, right = st.columns([1, 3])
 with left:
     start = st.button("▶ Scan NSE stocks", type="primary", use_container_width=True)
 with right:
-    st.info("A full NSE scan can take several minutes. Yahoo Finance may occasionally omit or delay individual symbols.")
+    st.info("Default scans the entire current NSE Series EQ list. Large scans can take time; Yahoo Finance may throttle or omit some symbols.")
 
 if start:
-    selected = symbols[:batch_size]
+    selected = symbols if batch_size == "All NSE stocks" else symbols[:int(batch_size)]
     progress = st.progress(0, text="Starting market-data downloads…")
     status = st.empty()
     def update_progress(done, total, symbol):
