@@ -75,7 +75,8 @@ st.markdown("### Your market workspace")
 st.caption("Daily timeframe · M1 CRT + M2 Sweep → M3 Entry · Based on your Pine Script rules")
 
 with st.sidebar:
-    st.markdown("## ⚙️ Scanner settings")\n    st.caption("Tune your scan")
+    st.markdown("## ⚙️ Scanner settings")
+    st.caption("Tune your scan")
     period = st.selectbox("Historical data", ["3y", "5y", "2y"], index=0)
     batch_size = st.selectbox("Symbols per run", ["All NSE stocks", 500, 1000, 2000], index=0)
     workers = st.slider("Parallel downloads", 2, 12, 8)
