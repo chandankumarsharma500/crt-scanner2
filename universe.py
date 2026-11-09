@@ -1,4 +1,4 @@
-"""NSE cash-equity universe and Yahoo Finance history loader."""
+"""Market symbol universes and Yahoo Finance daily history loader."""
 from __future__ import annotations
 import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,8 +16,36 @@ HEADERS = {
     "Referer": "https://www.nseindia.com/",
 }
 
+# Yahoo Finance symbols are used as a practical cross-market data source.
+# Non-NSE universes are curated liquid watchlists, not every listed security.
+MARKET_WATCHLISTS = {
+    "BSE – Indian Stocks": {
+        "type": "BSE",
+        "symbols": ["RELIANCE.BO","TCS.BO","HDFCBANK.BO","ICICIBANK.BO","INFY.BO","ITC.BO","SBIN.BO","BHARTIARTL.BO","LT.BO","AXISBANK.BO","KOTAKBANK.BO","HINDUNILVR.BO","BAJFINANCE.BO","MARUTI.BO","TATAMOTORS.BO","SUNPHARMA.BO","WIPRO.BO","TATASTEEL.BO","NTPC.BO","POWERGRID.BO"]
+    },
+    "NIFTY / BANKNIFTY – Indices": {
+        "type": "INDEX",
+        "symbols": ["^NSEI","^NSEBANK","^BSESN","^CNXIT"]
+    },
+    "MCX – Commodities": {
+        "type": "MCX",
+        "symbols": ["GOLD=F","SILVER=F","CL=F","NG=F","HG=F","PL=F"]
+    },
+    "Forex – Currency": {
+        "type": "FOREX",
+        "symbols": ["USDINR=X","EURINR=X","GBPINR=X","JPYINR=X","EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X"]
+    },
+    "Crypto – Bitcoin एवं अन्य": {
+        "type": "CRYPTO",
+        "symbols": ["BTC-USD","ETH-USD","BNB-USD","SOL-USD","XRP-USD","ADA-USD","DOGE-USD","TRX-USD","AVAX-USD","LINK-USD"]
+    },
+    "NASDAQ / NYSE – US Stocks": {
+        "type": "US",
+        "symbols": ["AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AVGO","NFLX","AMD","JPM","V","WMT","LLY","XOM","COST","ORCL","KO","DIS","BAC"]
+    },
+}
+
 def load_nse_symbols() -> pd.DataFrame:
-    """Fetch current NSE listed equity symbols (Series EQ only)."""
     errors = []
     for url in NSE_CSV_URLS:
         try:
@@ -36,26 +64,29 @@ def load_nse_symbols() -> pd.DataFrame:
             errors.append(f"{url}: {exc}")
     raise RuntimeError("NSE symbol list download failed. " + " | ".join(errors))
 
-def _download_one(symbol: str, period: str):
-    ticker = symbol if symbol.endswith(".NS") else f"{symbol}.NS"
-    try:
-        data = yf.download(ticker, period=period, interval="1d", auto_adjust=False,
-                           progress=False, threads=False, timeout=20)
-        if data is None or data.empty:
-            return symbol, None, "No daily data returned"
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.get_level_values(0)
-        return symbol, data, None
-    except Exception as exc:
-        return symbol, None, str(exc)
-
-def download_histories(symbols: list[str], period: str = "3y", workers: int = 8, progress_callback=None):
+def download_market_histories(items: list[tuple[str, str]], period: str = "3y",
+                              workers: int = 8, progress_callback=None):
     histories, errors = {}, {}
+    def fetch(item):
+        label, ticker = item
+        try:
+            data = yf.download(ticker, period=period, interval="1d", auto_adjust=False,
+                               progress=False, threads=False, timeout=20)
+            if data is None or data.empty:
+                return label, None, f"No daily data returned for {ticker}"
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.get_level_values(0)
+            return label, data, None
+        except Exception as exc:
+            return label, None, str(exc)
     with ThreadPoolExecutor(max_workers=max(1, min(workers, 12))) as pool:
-        futures = {pool.submit(_download_one, s, period): s for s in symbols}
+        futures = {pool.submit(fetch, item): item[0] for item in items}
         for count, future in enumerate(as_completed(futures), start=1):
-            symbol, data, error = future.result()
-            if data is not None: histories[symbol] = data
-            else: errors[symbol] = error or "Unknown download error"
-            if progress_callback: progress_callback(count, len(symbols), symbol)
+            label, data, error = future.result()
+            if data is not None:
+                histories[label] = data
+            else:
+                errors[label] = error or "Unknown data error"
+            if progress_callback:
+                progress_callback(count, len(items), label)
     return histories, errors
