@@ -33,6 +33,21 @@ def _num(value: Any) -> float | None:
         return x if math.isfinite(x) else None
     except (TypeError, ValueError):
         return None
+def _pine_rma(series: pd.Series, length: int) -> pd.Series:
+    """Wilder RMA used by Pine ta.atr(): SMA seed, then recursive smoothing."""
+    values = series.to_numpy(dtype=float)
+    result = np.full(len(values), np.nan)
+    valid = np.flatnonzero(np.isfinite(values))
+    if len(valid) < length:
+        return pd.Series(result, index=series.index)
+    seed_end = valid[length - 1]
+    result[seed_end] = float(np.mean(values[valid[:length]]))
+    for i in range(seed_end + 1, len(values)):
+        if np.isfinite(values[i]):
+            result[i] = (result[i - 1] * (length - 1) + values[i]) / length
+        else:
+            result[i] = result[i - 1]
+    return pd.Series(result, index=series.index)
 
 def _pine_pivots(series: pd.Series, left: int, right: int, high_pivot: bool) -> pd.Series:
     values = series.to_numpy(dtype=float)
@@ -97,7 +112,7 @@ def scan_symbol(symbol: str, history: pd.DataFrame, atr_len: int = 14,
     df = _monthly_context(df)
     prev_close = df.Close.shift(1)
     tr = pd.concat([df.High-df.Low, (df.High-prev_close).abs(), (df.Low-prev_close).abs()], axis=1).max(axis=1)
-    df["atr"] = tr.ewm(alpha=1/atr_len, adjust=False, min_periods=atr_len).mean()
+    df["atr"] = _pine_rma(tr, atr_len)
     df["pl"] = df.Low.rolling(sweep_lookback, min_periods=sweep_lookback).min()
     df["ph"] = df.High.rolling(sweep_lookback, min_periods=sweep_lookback).max()
     df["hh5"] = df.High.rolling(5, min_periods=5).max()
@@ -105,7 +120,9 @@ def scan_symbol(symbol: str, history: pd.DataFrame, atr_len: int = 14,
     df["lastPH"] = _pine_pivots(df.High, pivot_left, pivot_right, True)
     df["lastPL"] = _pine_pivots(df.Low, pivot_left, pivot_right, False)
     off = 1 if confirmed_only else 0
-    cur = len(df)-1-off
+    # Pine bias/LTP use the current bar; only nested signal/sweep searches
+    # are shifted by _off when confirmed_only is enabled.
+    cur = len(df)-1
     if cur < 1:
         return result
     row = df.iloc[cur]
@@ -127,7 +144,7 @@ def scan_symbol(symbol: str, history: pd.DataFrame, atr_len: int = 14,
     if bias == 1 and close_now > m1l:
         for c in range(entry_lookback):
             for s in range(c+1, c+1+sweep_lookback):
-                cc, ss = cur-c, cur-s
+                cc, ss = cur-(c+off), cur-(s+off)
                 prior_idx = ss-1
                 if prior_idx < 0 or cc < 0 or ss < 0:
                     continue
@@ -149,7 +166,7 @@ def scan_symbol(symbol: str, history: pd.DataFrame, atr_len: int = 14,
     elif bias == -1 and close_now < m1h:
         for c in range(entry_lookback):
             for s in range(c+1, c+1+sweep_lookback):
-                cc, ss = cur-c, cur-s
+                cc, ss = cur-(c+off), cur-(s+off)
                 prior_idx = ss-1
                 if prior_idx < 0 or cc < 0 or ss < 0:
                     continue
@@ -177,7 +194,7 @@ def scan_symbol(symbol: str, history: pd.DataFrame, atr_len: int = 14,
         stage = 3
     elif stage == 1:
         for s in range(sweep_lookback):
-            ss, prior_idx = cur-s, cur-s-1
+            ss, prior_idx = cur-(s+off), cur-(s+off)-1
             if prior_idx < 0: continue
             if bias == 1:
                 prior = _num(df.pl.iloc[prior_idx])
