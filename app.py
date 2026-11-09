@@ -2,189 +2,158 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 from scanner import scan_symbol
-from universe import load_nse_symbols, download_histories
+from universe import load_nse_symbols, MARKET_WATCHLISTS, download_market_histories
 
-
-st.set_page_config(page_title="CRT Scanner 2 · NSE", page_icon="📈", layout="wide")
-
-# Modern dark dashboard styling (keeps the existing scanner logic unchanged)
+st.set_page_config(page_title="CRT Multi-Market Scanner", page_icon="📈", layout="wide")
 st.markdown("""
 <style>
-:root { color-scheme: dark; }
-.stApp {
-  background:
-    radial-gradient(ellipse at 12% 0%, rgba(0,118,255,.20), transparent 38%),
-    radial-gradient(ellipse at 90% 15%, rgba(0,220,150,.10), transparent 32%),
-    linear-gradient(145deg, #050d1d 0%, #07172e 55%, #061225 100%);
-  color: #edf5ff;
-}
-.block-container { max-width: 1500px; padding-top: 2rem; padding-bottom: 3rem; }
-[data-testid="stHeader"] { background: rgba(4,12,27,.72); }
-[data-testid="stSidebar"] {
-  background: linear-gradient(180deg, #0b1c36 0%, #071326 100%);
-  border-right: 1px solid rgba(65,160,255,.28);
-}
-[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 { color: #eaf4ff; }
-h1, h2, h3 { color: #f4f8ff !important; letter-spacing: -.03em; }
-p, label, .stMarkdown { color: #c7d7ee; }
-.crt-hero {
-  padding: 25px 30px; margin: 0 0 22px 0; border-radius: 22px;
-  background: linear-gradient(110deg, rgba(12,42,82,.96), rgba(5,25,48,.94) 58%, rgba(0,92,83,.72));
-  border: 1px solid rgba(43,180,255,.42);
-  box-shadow: 0 16px 45px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.06);
-}
-.crt-kicker { color:#51f0bd; font-size: .78rem; font-weight:800; letter-spacing:.18em; text-transform:uppercase; }
-.crt-title { font-size: clamp(2rem,4vw,3.2rem); font-weight:900; color:#fff; line-height:1.05; margin:8px 0; }
-.crt-title span { color:#50edaa; }
-.crt-sub { color:#c4dcf5; font-size:1rem; margin-top:8px; }
-div[data-testid="stMetric"] {
-  background: linear-gradient(145deg, rgba(14,43,78,.96), rgba(7,25,47,.96));
-  border: 1px solid rgba(62,151,230,.30); border-radius:16px;
-  padding:16px 18px; box-shadow:0 10px 28px rgba(0,0,0,.18);
-}
-div[data-testid="stMetricLabel"] { color:#a9c7e8 !important; }
-div[data-testid="stMetricValue"] { color:#54efb0 !important; font-weight:850; }
-.stButton > button, .stDownloadButton > button {
-  border-radius: 12px; border: 1px solid rgba(74,222,170,.55);
-  background: linear-gradient(100deg,#087fcb,#08b981); color:#041629;
-  font-weight:800; min-height: 2.8rem; transition: all .18s ease;
-}
-.stButton > button:hover, .stDownloadButton > button:hover {
-  border-color:#8affd2; color:#001b24; box-shadow:0 0 22px rgba(20,220,160,.24);
-}
-div[data-testid="stDataFrame"], div[data-testid="stTable"] {
-  border:1px solid rgba(67,151,226,.32); border-radius:14px; overflow:hidden;
-}
-div[data-testid="stAlert"] { border-radius:14px; }
-div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
-  background:#0b1d35; border-color:#24496f; border-radius:10px;
-}
-hr { border-color:rgba(74,145,210,.25); }
+.stApp{background:radial-gradient(ellipse at 10% 0%,rgba(0,118,255,.2),transparent 38%),linear-gradient(145deg,#050d1d,#07172e 55%,#061225);color:#edf5ff}
+.block-container{max-width:1550px;padding-top:2rem}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#0b1c36,#071326);border-right:1px solid #24496f}
+h1,h2,h3{color:#f4f8ff!important}.stMarkdown,p,label{color:#c7d7ee}
+.hero{padding:25px 30px;margin-bottom:20px;border-radius:22px;background:linear-gradient(110deg,#0c2a52,#051930 58%,#005c53);border:1px solid #2bb4ff66}
+.kicker{color:#51f0bd;font-size:.78rem;font-weight:800;letter-spacing:.18em}
+.big{font-size:clamp(2rem,4vw,3.2rem);font-weight:900;color:white}.big span{color:#50edaa}
+div[data-testid="stMetric"]{background:linear-gradient(145deg,#0e2b4e,#07192f);border:1px solid #3e97e64d;border-radius:16px;padding:14px}
+div[data-testid="stMetricValue"]{color:#54efb0!important;font-weight:850}
+.stButton>button,.stDownloadButton>button{border-radius:12px;border:1px solid #4adeaa;background:linear-gradient(100deg,#087fcb,#08b981);color:#041629;font-weight:800;min-height:2.8rem}
+div[data-testid="stDataFrame"]{border:1px solid #4397e252;border-radius:14px;overflow:hidden}
 </style>
+<div class="hero"><div class="kicker">ONE CLICK · SEVEN MARKET PANELS</div>
+<div class="big">🛡️ CRT <span>MULTI-MARKET</span> SCANNER</div>
+<div>Scan · Detect · Verify &nbsp; | &nbsp; M1 CRT → M2 Sweep → M3 Entry</div></div>
 """, unsafe_allow_html=True)
-
-st.markdown("""
-<div class="crt-hero">
-  <div class="crt-kicker">NSE EQUITY MARKET SCANNER</div>
-  <div class="crt-title">🛡️ CRT <span>SCANNER</span></div>
-  <div class="crt-sub">Scan · Detect · Verify &nbsp; | &nbsp; M1 CRT → M2 Sweep → M3 Entry</div>
-</div>
-""", unsafe_allow_html=True)
-st.markdown("### Your market workspace")
-st.caption("Daily timeframe · M1 CRT + M2 Sweep → M3 Entry · Based on your Pine Script rules")
 
 with st.sidebar:
     st.markdown("## ⚙️ Scanner settings")
-    st.caption("Tune your scan")
-    period = st.selectbox("Historical data", ["3y", "5y", "2y"], index=0)
-    batch_size = st.selectbox("Symbols per run", ["All NSE stocks", 500, 1000, 2000], index=0)
-    workers = st.slider("Parallel downloads", 2, 12, 8)
+    period = st.selectbox("Historical data", ["3y","5y","2y"], index=0)
+    nse_limit = st.selectbox("NSE symbols per scan", ["All NSE stocks",500,1000,2000], index=0)
+    workers = st.slider("Parallel downloads",2,12,8)
     st.divider()
     st.markdown("### 🎯 CRT strategy")
-    atr_len = st.number_input("ATR Length", 1, 100, 14)
-    disp = st.number_input("Displacement × ATR", 0.1, 10.0, 1.2, 0.1)
-    piv_l = st.number_input("Pivot Left", 1, 20, 3)
-    piv_r = st.number_input("Pivot Right", 1, 20, 3)
-    sweep_lb = st.number_input("Sweep Lookback (days)", 3, 60, 10)
-    entry_lb = st.number_input("Entry valid (daily candles)", 1, 10, 3)
-    confirmed = st.checkbox("Only confirmed / closed daily candles", value=True)
-    only_ready = st.checkbox("Show only setup-ready symbols", value=True)
+    atr_len=st.number_input("ATR Length",1,100,14)
+    disp=st.number_input("Displacement × ATR",0.1,10.0,1.2,0.1)
+    piv_l=st.number_input("Pivot Left",1,20,3)
+    piv_r=st.number_input("Pivot Right",1,20,3)
+    sweep_lb=st.number_input("Sweep Lookback (daily bars)",3,60,10)
+    entry_lb=st.number_input("Entry valid (daily candles)",1,10,3)
+    confirmed=st.checkbox("Only confirmed / closed daily candles",value=True)
+    only_ready=st.checkbox("Show only setup-ready symbols",value=True)
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_universe():
+@st.cache_data(ttl=3600,show_spinner=False)
+def get_nse_universe():
     return load_nse_symbols()
 
 try:
-    universe = get_universe()
-    st.success(f"NSE equity universe loaded: {len(universe):,} symbols (Series EQ)")
+    nse_symbols=get_nse_universe()["SYMBOL"].tolist()
 except Exception as exc:
-    st.error(f"Could not load the live NSE symbol list: {exc}")
-    st.stop()
+    nse_symbols=[]
+    st.warning(f"NSE live list unavailable: {exc}. Other market panels can still scan.")
 
-symbols = universe["SYMBOL"].tolist()
-if "scan_results" not in st.session_state: st.session_state.scan_results = None
-if "scan_errors" not in st.session_state: st.session_state.scan_errors = {}
+market_items={"NSE – Indian Stocks":[(s,f"{s}.NS") for s in nse_symbols]}
+for market, config in MARKET_WATCHLISTS.items():
+    market_items[market]=[(ticker,ticker) for ticker in config["symbols"]]
 
-left, right = st.columns([1, 3])
-with left:
-    start = st.button("▶ Scan NSE stocks", type="primary", use_container_width=True)
-with right:
-    st.info("Default scans the entire current NSE Series EQ list. Large scans can take time; Yahoo Finance may throttle or omit some symbols.")
+if "market_results" not in st.session_state:
+    st.session_state.market_results={}
+if "market_errors" not in st.session_state:
+    st.session_state.market_errors={}
 
+st.markdown("### 🌐 Seven independent market panels")
+st.caption("All panels use the same CRT rules and one shared Scan All button. Market data availability depends on Yahoo Finance coverage.")
+summary=st.columns(7)
+for col,(market,items) in zip(summary,market_items.items()):
+    col.metric(market.split("–")[0].strip(),len(items))
+
+start=st.button("🚀 SCAN ALL MARKETS",type="primary",use_container_width=True)
 if start:
-    selected = symbols if batch_size == "All NSE stocks" else symbols[:int(batch_size)]
-    progress = st.progress(0, text="Starting market-data downloads…")
-    status = st.empty()
-    def update_progress(done, total, symbol):
-        progress.progress(done / max(total, 1), text=f"Downloaded {done:,}/{total:,} · {symbol}")
-        status.caption(f"Processing NSE universe: {done:,} of {total:,}")
-    histories, errors = download_histories(selected, period, workers, update_progress)
-    results = []
-    for symbol, history in histories.items():
-        try:
-            result = scan_symbol(symbol, history, int(atr_len), float(disp), int(piv_l),
-                                 int(piv_r), int(sweep_lb), int(entry_lb), bool(confirmed))
-            results.append(result.to_dict())
-        except Exception as exc:
-            errors[symbol] = f"Scanner error: {exc}"
-    st.session_state.scan_results = pd.DataFrame(results)
-    st.session_state.scan_errors = errors
-    st.session_state.scanned_count = len(selected)
-    st.session_state.success_count = len(histories)
-    progress.empty(); status.empty()
-    st.toast(f"Scan complete: {len(results)} symbols evaluated")
+    total=sum(len(v) for v in market_items.values())
+    progress=st.progress(0,text="Preparing all market scans…")
+    status=st.empty()
+    completed=0
+    all_results={}
+    all_errors={}
+    for market,items in market_items.items():
+        if not items:
+            all_results[market]=pd.DataFrame()
+            continue
+        # One global button triggers each market sequentially; each panel retains its own results.
+        def callback(done, count, symbol, market_name=market):
+            nonlocal_dummy = None
+            status.caption(f"{market_name}: downloaded {done:,}/{count:,} · {symbol}")
+        histories,errors=download_market_histories(items,period,workers,callback)
+        rows=[]
+        for symbol,history in histories.items():
+            try:
+                rows.append(scan_symbol(symbol,history,int(atr_len),float(disp),int(piv_l),
+                    int(piv_r),int(sweep_lb),int(entry_lb),bool(confirmed)).to_dict())
+            except Exception as exc:
+                errors[symbol]=f"Scanner error: {exc}"
+        frame=pd.DataFrame(rows)
+        if not frame.empty:
+            frame.insert(0,"market",market)
+        all_results[market]=frame
+        all_errors[market]=errors
+        completed+=len(items)
+        progress.progress(min(completed/max(total,1),1.0),text=f"Finished {market}")
+    st.session_state.market_results=all_results
+    st.session_state.market_errors=all_errors
+    progress.empty();status.empty()
+    st.success("All market scans finished. Open each panel below to inspect its independent results.")
 
-data = st.session_state.scan_results
-if data is not None:
-    if data.empty:
-        st.warning("No symbols produced usable daily data in this run.")
-    else:
-        ready = data[data["stage"] >= 1].copy()
-        swept = data[data["stage"] == 2]
-        entries = data[data["stage"] == 3]
-        buys, sells = entries[entries["signal"] == "BUY"], entries[entries["signal"] == "SELL"]
-        m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("Symbols scanned", f"{len(data):,}")
-        m2.metric("Setup ready", f"{len(ready):,}")
-        m3.metric("Sweep found", f"{len(swept):,}")
-        m4.metric("BUY entries", f"{len(buys):,}")
-        m5.metric("SELL entries", f"{len(sells):,}")
-        view = ready if only_ready else data
-        view = view.sort_values(["stage", "symbol"], ascending=[False, True])
-        st.subheader("Scanner dashboard")
-        search = st.text_input("Filter symbol", placeholder="e.g. RELIANCE")
-        if search: view = view[view.symbol.str.contains(search.upper(), na=False)]
-        cols = ["symbol", "bias", "m1_high", "m1_low", "m2_high", "m2_low", "m2_close",
-                "stage_text", "ltp", "entry", "sl", "t1", "t2", "invalidation"]
-        st.dataframe(view[cols], use_container_width=True, hide_index=True,
-                     column_config={
-                         "symbol": st.column_config.TextColumn("Symbol"),
-                         "bias": st.column_config.TextColumn("Bias"),
-                         "stage_text": st.column_config.TextColumn("Stage"),
-                         "ltp": st.column_config.NumberColumn("LTP", format="₹%.2f"),
-                         "entry": st.column_config.NumberColumn("Entry", format="₹%.2f"),
-                         "sl": st.column_config.NumberColumn("SL", format="₹%.2f"),
-                         "t1": st.column_config.NumberColumn("T1", format="₹%.2f"),
-                         "t2": st.column_config.NumberColumn("T2", format="₹%.2f"),
-                     })
-        st.download_button("⬇ Download scan results (CSV)", data=view.to_csv(index=False).encode("utf-8"),
-                           file_name="crt_nse_scan.csv", mime="text/csv")
-        if st.session_state.scan_errors:
-            with st.expander(f"Symbols without data / errors ({len(st.session_state.scan_errors)})"):
-                st.dataframe(pd.DataFrame([{"symbol": k, "reason": v} for k, v in st.session_state.scan_errors.items()]),
-                             use_container_width=True, hide_index=True)
+results=st.session_state.market_results
+if results:
+    frames=[df for df in results.values() if df is not None and not df.empty]
+    combined=pd.concat(frames,ignore_index=True) if frames else pd.DataFrame()
+    if not combined.empty:
+        entries=combined[combined.stage==3]
+        c1,c2,c3,c4=st.columns(4)
+        c1.metric("Total scanned",f"{len(combined):,}")
+        c2.metric("Setup ready",f"{int((combined.stage>=1).sum()):,}")
+        c3.metric("BUY signals",f"{int((entries.signal=='BUY').sum()):,}")
+        c4.metric("SELL signals",f"{int((entries.signal=='SELL').sum()):,}")
+        st.download_button("⬇ Download combined results CSV",combined.to_csv(index=False).encode("utf-8"),
+            "crt_all_markets.csv","text/csv")
+    st.markdown("### 📊 Market-wise results")
+    tabs=st.tabs(list(market_items.keys()))
+    display_cols=["symbol","bias","stage_text","signal","ltp","entry","sl","t1","t2","m1_high","m1_low","m2_high","m2_low"]
+    for tab,market in zip(tabs,market_items):
+        with tab:
+            df=results.get(market,pd.DataFrame())
+            st.markdown(f"#### {market}")
+            if df is None or df.empty:
+                st.info("No usable data returned for this panel yet.")
+            else:
+                view=df[df.stage>=1].copy() if only_ready else df.copy()
+                view=view.sort_values(["stage","symbol"],ascending=[False,True])
+                query=st.text_input("Filter this market",key=f"filter_{market}",placeholder="Search symbol")
+                if query:
+                    view=view[view.symbol.str.contains(query.upper(),na=False)]
+                st.metric("Symbols scanned",len(df))
+                st.dataframe(view[[c for c in display_cols if c in view.columns]],
+                    use_container_width=True,hide_index=True,
+                    column_config={"ltp":st.column_config.NumberColumn("LTP",format="%.4f"),
+                    "entry":st.column_config.NumberColumn("Entry",format="%.4f"),
+                    "sl":st.column_config.NumberColumn("SL",format="%.4f"),
+                    "t1":st.column_config.NumberColumn("T1",format="%.4f"),
+                    "t2":st.column_config.NumberColumn("T2",format="%.4f")})
+                st.download_button(f"Download {market} CSV",view.to_csv(index=False).encode("utf-8"),
+                    file_name=f"crt_{market.split('–')[0].strip().lower().replace('/','_').replace(' ','_')}.csv",
+                    mime="text/csv",key=f"download_{market}")
+            errors=st.session_state.market_errors.get(market,{})
+            if errors:
+                with st.expander(f"Data errors / unavailable symbols ({len(errors)})"):
+                    st.dataframe(pd.DataFrame([{"symbol":k,"reason":v} for k,v in errors.items()]),
+                        use_container_width=True,hide_index=True)
 else:
+    st.info("Press the single SCAN ALL MARKETS button to run all seven panels. Results will remain separated by market.")
     st.markdown("""
-    **Signal stages**
-    - **Stage 1 — Wait Sweep:** M2 creates the CRT bias relative to M1.
-    - **Stage 2 — Wait CHoCH:** Price sweeps the prior rolling high/low and closes back inside.
-    - **Stage 3 — BUY / SELL:** Displacement candle breaks the latest confirmed pivot (fallback: 5-day high/low).
+**Signal stages**
+- **Stage 1 — Wait Sweep:** M2 defines bullish/bearish CRT bias relative to M1.
+- **Stage 2 — Wait CHoCH:** Price sweeps a prior rolling high/low and closes back inside.
+- **Stage 3 — BUY / SELL:** Displacement candle breaks the latest confirmed pivot.
 
-    The scanner uses daily OHLC history, the Pine script's default ATR / pivot / sweep / entry parameters,
-    and confirmed closed daily candles by default. The live NSE equity list is fetched when the app loads.
-    """)
-    st.caption("Press “Scan NSE stocks” to start. Test a smaller batch before a full-universe run.")
-
+**Coverage note:** NSE uses the live Series EQ list. BSE, indices, commodities, forex, crypto and US stocks use curated Yahoo Finance ticker watchlists; these are not exhaustive exchange-wide listings. Yahoo Finance data can be delayed, incomplete or unavailable. This tool is for research, not investment advice.
+""")
 st.divider()
-st.caption("Market data is supplied by Yahoo Finance and may be delayed, incomplete, or unavailable for some NSE symbols. Research use only; not investment advice.")
+st.caption("Daily OHLC data via Yahoo Finance. No orders are placed. Validate signals independently before trading.")
